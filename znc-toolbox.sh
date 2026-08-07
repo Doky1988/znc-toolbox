@@ -239,8 +239,6 @@ make_config() {
     msg "               ${C_BOLD}── ZNC Konfigurációs Varázsló ──${C_RESET}"
     echo ""
     msg "  A varázsló végigvezet a szükséges beállításokon."
-    msg "  ${C_YELLOW}A varázsló végén válaszd a 'No'-t, hogy a ZNC ne induljon el,${C_RESET}"
-    msg "  ${C_YELLOW}így a script befejezheti a systemd szolgáltatás beállítását.${C_RESET}"
     echo ""
 
     read -r -p "  Folytatás? [Enter] "

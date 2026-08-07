@@ -99,7 +99,7 @@ sudo ./znc-toolbox.sh help         # Súgó
   Konfig     /home/znc/.znc/configs/znc.conf
   Szolg.     znc.service (fut)
   Verzió     ZNC 1.10.2 - https://znc.in
-  Port       11337 (nyitva)
+  Port       12345 (nyitva)
   Webadmin   http://123.45.67.89:12345/
 
   Parancsok:
@@ -130,7 +130,7 @@ sudo ./znc-toolbox.sh help         # Súgó
   Konfig     /home/znc/.znc/configs/znc.conf
   Szolg.     znc.service (fut)
   Verzió     1.9.1 ▸ 1.10.2
-  Port       11337 (nyitva)
+  Port       12345 (nyitva)
   Webadmin   http://123.45.67.89:12345/
 
   Parancsok:

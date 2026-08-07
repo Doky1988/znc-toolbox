@@ -42,7 +42,7 @@
 ### Letöltés
 
 ```bash
-wget https://raw.githubusercontent.com/Doky1988/znctoolbox/refs/heads/main/znc-toolbox.sh
+wget https://raw.githubusercontent.com/Doky1988/znctoolbox/main/znc-toolbox.sh
 chmod +x znc-toolbox.sh
 ```
 

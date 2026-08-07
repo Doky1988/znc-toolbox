@@ -161,11 +161,5 @@ sudo ./znc-toolbox.sh help         # Súgó
 
 ---
 
-## ⚖️ Licensz
-
-[MIT](LICENSE)
-
----
-
 ## ❤️ Készítette: Doky  
 📅 2026.08.07

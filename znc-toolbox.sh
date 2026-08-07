@@ -39,7 +39,7 @@ info()     { echo -e "  ${C_CYAN}[i]${C_RESET} ${1}"; }
 ok()       { echo -e "  ${C_GREEN}[✔]${C_RESET} ${1}"; }
 warn()     { echo -e "  ${C_YELLOW}[!]${C_RESET} ${1}"; }
 error()    { echo -e "  ${C_RED}[✘]${C_RESET} ${1}" >&2; }
-header()   { echo -e "\n${C_BOLD}━ ${1}${C_RESET}"; }
+header()   { echo -e "\n  ${C_BOLD}━ ${1}${C_RESET}"; }
 
 die() {
     error "$1"
@@ -422,7 +422,7 @@ print_summary() {
 #  STATUS — aktuális ZNC állapot kiírása
 # ══════════════════════════════════════════════════════════════════════════════
 show_status() {
-    echo -e "\n${C_BOLD}═══ ZNC Állapot ═══${C_RESET}\n"
+    echo -e "\n  ${C_BOLD}═══ ZNC Állapot ═══${C_RESET}\n"
 
     local latest_fallback
     latest_fallback="$(get_latest_version 2>/dev/null || echo '?')"
@@ -486,7 +486,7 @@ do_install() {
     fi
 
     check_os
-    echo -e "\n${C_BOLD}═══ ZNC Telepítő ═══${C_RESET}"
+    echo -e "\n  ${C_BOLD}═══ ZNC Telepítő ═══${C_RESET}"
 
     echo ""
     read -r -p "  IPv6 engedélyezése? [I/n] " enable_ipv6
@@ -530,7 +530,7 @@ do_update() {
 
     check_os
 
-    echo -e "\n${C_BOLD}═══ ZNC Frissítő ═══${C_RESET}\n"
+    echo -e "\n  ${C_BOLD}═══ ZNC Frissítő ═══${C_RESET}\n"
     msg "Telepített verzió: ${C_YELLOW}${installed}${C_RESET}"
     msg "Elérhető verzió:  ${C_GREEN}${latest}${C_RESET}"
 
@@ -599,7 +599,7 @@ do_update() {
 #  UNINSTALL — teljes eltávolítás
 # ══════════════════════════════════════════════════════════════════════════════
 do_uninstall() {
-    echo -e "\n${C_BOLD}═══ ZNC Eltávolító ═══${C_RESET}\n"
+    echo -e "\n  ${C_BOLD}═══ ZNC Eltávolító ═══${C_RESET}\n"
 
     warn "${C_RED}FIGYELEM:${C_RESET} Ez törli a ZNC-t, a konfigurációt és a felhasználót!"
     read -r -p "  Biztosan folytatod? (írd be: IGEN) " confirm
@@ -729,7 +729,7 @@ show_menu() {
     _hrule "$box_w"
 
     if [[ -n "$installed" ]]; then
-        _box_line "  Telepítve: ${C_GREEN}${installed}${C_RESET}   Friss: ${C_GREEN}${latest}${C_RESET}" "$box_w"
+        _center_line "Telepítve: ${C_GREEN}${installed}${C_RESET}   Friss: ${C_GREEN}${latest}${C_RESET}" "$box_w"
         if [[ "$latest" != "?" ]] && [[ "$installed" != "$latest" ]]; then
             _center_line "${C_YELLOW}◈  Frissítés elérhető!${C_RESET}" "$box_w"
         fi

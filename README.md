@@ -33,7 +33,7 @@ Fordítja a ZNC-t forráskódból a legfrissebb stabil verzióra, systemd szolg�
 ### Letöltés
 
 ```bash
-wget https://raw.githubusercontent.com/<user>/<repo>/main/znc-toolbox.sh
+wget https://raw.githubusercontent.com/<user>/<repo>/main/znc-toolbox.sh](https://raw.githubusercontent.com/Doky1988/znctoolbox/refs/heads/main/znc-toolbox.sh
 chmod +x znc-toolbox.sh
 ```
 

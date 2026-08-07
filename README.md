@@ -1,12 +1,21 @@
-# ZNC Toolbox
+<h1 align="center">⚡ ZNC Toolbox</h1>
 
-**Telepítő, Frissítő és Eltávolító eszköz ZNC IRC Bouncerhez — Debian / Ubuntu rendszerekre.**
+<p align="center">
+  <img src="https://img.shields.io/badge/Debian-Ready-red?style=for-the-badge&logo=debian" />
+  <img src="https://img.shields.io/badge/Ubuntu-Ready-orange?style=for-the-badge&logo=ubuntu" />
+  <img src="https://img.shields.io/badge/ZNC-IRCBouncer-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Systemd-Service-green?style=for-the-badge&logo=linux" />
+  <img src="https://img.shields.io/badge/Bash-Script-black?style=for-the-badge&logo=gnubash" />
+  <img src="https://img.shields.io/badge/Author-Doky-purple?style=for-the-badge" />
+</p>
 
-Fordítja a ZNC-t forráskódból a legfrissebb stabil verzióra, systemd szolgáltatásként telepíti, kezeli a frissítéseket a konfiguráció megtartásával, és igény esetén teljesen eltávolítja.
+<p align="center"><strong>Telepítő, Frissítő és Eltávolító eszköz ZNC IRC Bouncerhez — Debian / Ubuntu rendszerekre.</strong></p>
+
+<p align="center">Fordítja a ZNC-t forráskódból a legfrissebb stabil verzióra, systemd szolgáltatásként telepíti, kezeli a frissítéseket a konfiguráció megtartásával, és igény esetén teljesen eltávolítja.</p>
 
 ---
 
-## Funkciók
+## 📌 Funkciók
 
 - **Telepítés** — legfrissebb stabil ZNC letöltése, fordítása, telepítése `/home/znc/znc` alá
 - **Frissítés** — új verzióra frissítés a meglévő konfiguráció megtartásával és biztonsági mentéssel
@@ -20,7 +29,7 @@ Fordítja a ZNC-t forráskódból a legfrissebb stabil verzióra, systemd szolg�
 
 ---
 
-## Rendszerkövetelmények
+## 📦 Rendszerkövetelmények
 
 - Debian vagy Ubuntu (bármely támogatott verzió)
 - Root jogosultság (`sudo`)
@@ -28,7 +37,7 @@ Fordítja a ZNC-t forráskódból a legfrissebb stabil verzióra, systemd szolg�
 
 ---
 
-## Telepítés és használat
+## 📥 Telepítés és használat
 
 ### Letöltés
 
@@ -69,7 +78,7 @@ sudo ./znc-toolbox.sh help         # Súgó
 
 ---
 
-## Telepítés menete
+## ⚙️ Telepítés menete
 
 1. **OS és root ellenőrzés**
 2. **IPv6 választás** — engedélyezed az IPv6 támogatást?
@@ -91,7 +100,7 @@ sudo ./znc-toolbox.sh help         # Súgó
   Szolg.     znc.service (fut)
   Verzió     ZNC 1.10.2 - https://znc.in
   Port       11337 (nyitva)
-  Webadmin   http://123.45.67.89:12345/
+  Webadmin   http://123.45.67.89:11337/
 
   Parancsok:
   systemctl start znc       ▸ indítás
@@ -104,7 +113,7 @@ sudo ./znc-toolbox.sh help         # Súgó
 
 ---
 
-## Frissítés menete
+## 🆙 Frissítés menete
 
 1. Meglévő konfiguráció biztonsági mentése (`znc.conf.bak-<időbélyeg>`)
 2. ZNC szolgáltatás leállítása
@@ -122,7 +131,7 @@ sudo ./znc-toolbox.sh help         # Súgó
   Szolg.     znc.service (fut)
   Verzió     1.9.1 ▸ 1.10.2
   Port       11337 (nyitva)
-  Webadmin   http://123.45.67.89:12345/
+  Webadmin   http://123.45.67.89:11337/
 
   Parancsok:
   systemctl restart znc     ▸ újraindítás
@@ -132,7 +141,7 @@ sudo ./znc-toolbox.sh help         # Súgó
 
 ---
 
-## Konfigurációs fájlok
+## 📂 Konfigurációs fájlok
 
 | Fájl | Leírás |
 |---|---|
@@ -143,7 +152,7 @@ sudo ./znc-toolbox.sh help         # Súgó
 
 ---
 
-## Megjegyzések
+## 📝 Megjegyzések
 
 - A függőségek (`build-essential`, `cmake`, stb.) az eltávolítás után is a rendszeren maradnak, mivel más programok is használhatják
 - A `--makeconf` varázsló végén válaszd a **No**-t, hogy a ZNC ne induljon el a konfigurálás után — a script a systemd szolgáltatáson keresztül indítja el
@@ -152,6 +161,11 @@ sudo ./znc-toolbox.sh help         # Súgó
 
 ---
 
-## Licensz
+## ⚖️ Licensz
 
 [MIT](LICENSE)
+
+---
+
+## ❤️ Készítette: Doky  
+📅 2026.08.07

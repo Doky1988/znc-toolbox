@@ -31,7 +31,7 @@
 
 ## 📦 Rendszerkövetelmények
 
-- Debian vagy Ubuntu (bármely támogatott verzió)
+- Debian 12/13 vagy Ubuntu 22.04/24.04
 - Root jogosultság (`sudo`)
 - Internetkapcsolat (letöltéshez és külső IP lekéréséhez)
 

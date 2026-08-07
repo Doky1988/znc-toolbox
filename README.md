@@ -100,7 +100,7 @@ sudo ./znc-toolbox.sh help         # Súgó
   Szolg.     znc.service (fut)
   Verzió     ZNC 1.10.2 - https://znc.in
   Port       11337 (nyitva)
-  Webadmin   http://123.45.67.89:11337/
+  Webadmin   http://123.45.67.89:12345/
 
   Parancsok:
   systemctl start znc       ▸ indítás
@@ -131,7 +131,7 @@ sudo ./znc-toolbox.sh help         # Súgó
   Szolg.     znc.service (fut)
   Verzió     1.9.1 ▸ 1.10.2
   Port       11337 (nyitva)
-  Webadmin   http://123.45.67.89:11337/
+  Webadmin   http://123.45.67.89:12345/
 
   Parancsok:
   systemctl restart znc     ▸ újraindítás

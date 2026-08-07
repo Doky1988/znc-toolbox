@@ -155,7 +155,6 @@ sudo ./znc-toolbox.sh help         # Súgó
 ## 📝 Megjegyzések
 
 - A függőségek (`build-essential`, `cmake`, stb.) az eltávolítás után is a rendszeren maradnak, mivel más programok is használhatják
-- A `--makeconf` varázsló végén válaszd a **No**-t, hogy a ZNC ne induljon el a konfigurálás után — a script a systemd szolgáltatáson keresztül indítja el
 - Frissítéskor a régi IPv6 beállítás automatikusan megmarad
 - A külső IP cím az `ipinfo.io` szolgáltatáson keresztül kerül lekérésre
 

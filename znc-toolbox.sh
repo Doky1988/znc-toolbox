@@ -242,7 +242,7 @@ make_config() {
     warn "Nincs konfiguráció. A --makeconf varázsló elindul..."
 
     echo ""
-    msg "               ${C_BOLD}── ZNC Konfigurációs Varázsló ──${C_RESET}"
+    msg "  ${C_BOLD}── ZNC Konfigurációs Varázsló ──${C_RESET}"
     echo ""
     msg "  A varázsló végigvezet a szükséges beállításokon."
     echo ""
@@ -500,7 +500,7 @@ do_install() {
     fi
 
     check_os
-    echo ""
+
     read -r -p "  IPv6 engedélyezése? [I/n] " enable_ipv6
     enable_ipv6="${enable_ipv6:-i}"
 
@@ -688,7 +688,6 @@ do_uninstall() {
 
     echo ""
     echo -e "  ${C_GREEN}${C_BOLD}═══ Eltávolítás kész ═══${C_RESET}"
-    echo ""
     log "=== ELTÁVOLÍTÁS KÉSZ ==="
 }
 

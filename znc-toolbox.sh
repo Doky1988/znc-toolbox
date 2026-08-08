@@ -9,6 +9,10 @@
 #   sudo ./znc-toolbox.sh update       ▸ frissítés
 #   sudo ./znc-toolbox.sh uninstall    ▸ eltávolítás
 #   sudo ./znc-toolbox.sh status       ▸ állapot
+#   sudo ./znc-toolbox.sh user list    ▸ felhasználók listázása
+#   sudo ./znc-toolbox.sh user add     ▸ új felhasználó hozzáadása
+#   sudo ./znc-toolbox.sh user del     ▸ felhasználó törlése
+#   sudo ./znc-toolbox.sh help         ▸ súgó
 # ---------------------------------------------------------------------------
 
 set -Eeuo pipefail
@@ -159,7 +163,7 @@ build_znc() {
     local url="${DL_BASE}/${tarball}"
 
     info "Letöltés: $url"
-    wget -q --show-progress --timeout=60 --tries=3 -O "${TMP_DIR}/${tarball}" "$url" \
+    wget -nv --show-progress --timeout=60 --tries=3 -O "${TMP_DIR}/${tarball}" "$url" \
         || die "Letöltés sikertelen."
     ok "Letöltés kész."
 
@@ -502,6 +506,7 @@ do_install() {
 
     check_os
 
+    local enable_ipv6
     read -r -p "  IPv6 engedélyezése? [I/n] " enable_ipv6
     enable_ipv6="${enable_ipv6:-i}"
 
@@ -509,6 +514,7 @@ do_install() {
     version="$(get_latest_version)"
     info "Legfrissebb verzió: ${C_BOLD}${version}${C_RESET}"
 
+    local custom_ver
     read -r -p "  Más verziót szeretnél? (pl. 1.9.1) [Enter a ${version} elfogadásához] " custom_ver
     version="${custom_ver:-$version}"
 
@@ -621,6 +627,7 @@ do_uninstall() {
     echo -e "\n  ${C_BOLD}═══ ZNC Eltávolító ═══${C_RESET}\n"
 
     warn "${C_RED}FIGYELEM:${C_RESET} Ez törli a ZNC-t, a konfigurációt és a felhasználót!"
+    local confirm
     read -r -p "  Biztosan folytatod? (írd be: IGEN) " confirm
     if [[ "$confirm" != "IGEN" ]]; then
         info "Eltávolítás megszakítva."
@@ -663,6 +670,7 @@ do_uninstall() {
     # Root alá került konfig takarítása
     if [[ -d /root/.znc ]]; then
         warn "Konfiguráció található a root home-jában: /root/.znc"
+        local del
         read -r -p "  Töröljük? [I/n] " del
         if [[ ! "$del" =~ ^[nN]$ ]]; then
             rm -rf /root/.znc
@@ -704,12 +712,14 @@ hash_password() {
     if [[ -z "$output" ]]; then
         die "Nem sikerült a jelszó hash generálása."
     fi
+    local method hash salt
     method="$(echo "$output" | grep -Po 'Method\s*=\s*\K\S+')"
     hash="$(echo "$output" | grep -Po 'Hash\s*=\s*\K\S+')"
     salt="$(echo "$output" | grep -Po 'Salt\s*=\s*\K\S+')"
     if [[ -z "$method" ]] || [[ -z "$hash" ]] || [[ -z "$salt" ]]; then
         die "Nem sikerült a jelszó hash értelmezése."
     fi
+    printf '%s\n' "$method" "$hash" "$salt"
 }
 
 # Felhasználók listázása
@@ -772,6 +782,7 @@ do_user_add() {
         error "A jelszavak nem egyeznek vagy üresek."
     done
 
+    local yn
     read -r -p "  Admin? [i/N] " yn
     if [[ "$yn" =~ ^[iI]$ ]]; then
         admin="true"
@@ -852,7 +863,8 @@ ${TAB}</Network>"
 
     # Jelszó hash
     info "Jelszó hash generálása..."
-    hash_password "$pass1"
+    local method hash salt
+    { read -r method; read -r hash; read -r salt; } < <(hash_password "$pass1")
 
     # User blokk összeállítása
     local user_block="
@@ -1004,6 +1016,7 @@ do_user_del() {
     sed -i ':a; /^\n*$/ { $d; N; ba; }' "$ZNC_CONF_FILE"
 
     # Moddata törlés felajánlva
+    local yn
     read -r -p "  Töröljük a moddata könyvtárakat is? [I/n] " yn
     if [[ ! "$yn" =~ ^[nN]$ ]]; then
         for username in "${valid_users[@]}"; do
@@ -1038,6 +1051,7 @@ user_menu() {
         _box_line "  0) Vissza"                       "$box_w"
         printf "  ${C_BOLD}└%s┘${C_RESET}\n" "$(printf '─%.0s' $(seq 1 $box_w))"
         echo ""
+        local choice
         read -r -p "  Válassz [0-3]: " choice
         case "$choice" in
             1) header "Felhasználók listája"; do_user_list ;;
@@ -1145,9 +1159,10 @@ usage() {
 interactive() {
     while true; do
         show_menu
+        local choice
         read -r -p "  Válassz [0-5]: " choice
         case "$choice" in
-            1) do_install ;;
+            1) do_install ;; 
             2) do_update ;;
             3) do_uninstall ;;
             4) show_status ;;

@@ -90,7 +90,8 @@ get_latest_version() {
         | grep -Po '"name":\s*"\Kznc-[0-9]+\.[0-9]+\.[0-9]+(?=")' \
         | head -1 || true)"
     if [[ -z "$tag" ]]; then
-        die "Nem sikerült lekérdezni a legfrissebb ZNC verziót."
+        error "Nem sikerült lekérdezni a legfrissebb ZNC verziót."
+        return 1
     fi
     echo "${tag#znc-}"
 }

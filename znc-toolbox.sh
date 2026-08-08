@@ -487,6 +487,8 @@ show_status() {
 #  INSTALL — teljes telepítés
 # ══════════════════════════════════════════════════════════════════════════════
 do_install() {
+    echo -e "\n  ${C_BOLD}═══ ZNC Telepítő ═══${C_RESET}\n"
+
     local installed
     installed="$(get_installed_version)"
 
@@ -494,13 +496,10 @@ do_install() {
         warn "ZNC ${installed} már telepítve van!"
         warn "Használd a 'update' parancsot a frissítéshez."
         warn "Vagy futtasd előbb a 'uninstall'-t a tiszta telepítéshez."
-        read -r -p "  (Enter a visszatéréshez) "
         return 0
     fi
 
     check_os
-    echo -e "\n  ${C_BOLD}═══ ZNC Telepítő ═══${C_RESET}"
-
     echo ""
     read -r -p "  IPv6 engedélyezése? [I/n] " enable_ipv6
     enable_ipv6="${enable_ipv6:-i}"
@@ -624,7 +623,6 @@ do_uninstall() {
     read -r -p "  Biztosan folytatod? (írd be: IGEN) " confirm
     if [[ "$confirm" != "IGEN" ]]; then
         info "Eltávolítás megszakítva."
-        read -r -p "  (Enter a visszatéréshez) "
         return 0
     fi
     echo ""

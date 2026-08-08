@@ -178,7 +178,7 @@ build_znc() {
         cmake -S "$src_dir" -B "$build_dir" $cmake_opts -Wno-dev \
         || die "CMake konfigurálás sikertelen."
 
-    _spin "Fordítás (make -j$(nproc)), ez eltarthat néhány percig" \
+    _spin "Fordítás, ez eltarthat néhány percig" \
         make -C "$build_dir" -j"$(nproc)" \
         || die "Fordítás sikertelen."
     ok "ZNC ${version} sikeresen lefordult."
@@ -206,14 +206,20 @@ create_user() {
             mkdir -p "$ZNC_HOME"
         fi
     else
+        local group_opt=""
+        if getent group "$ZNC_USER" &>/dev/null; then
+            group_opt="-g ${ZNC_USER}"
+        fi
         if [[ -d "$ZNC_HOME" ]]; then
             info "A(z) ${ZNC_HOME} könyvtár már létezik, --no-create-home használata."
+            # shellcheck disable=SC2086
             useradd --system --home-dir "$ZNC_HOME" --shell /bin/bash \
-                --no-create-home "$ZNC_USER" \
+                --no-create-home $group_opt "$ZNC_USER" \
                 || die "Felhasználó létrehozása sikertelen."
         else
+            # shellcheck disable=SC2086
             useradd --system --home-dir "$ZNC_HOME" --shell /bin/bash \
-                --create-home "$ZNC_USER" \
+                --create-home $group_opt "$ZNC_USER" \
                 || die "Felhasználó létrehozása sikertelen."
         fi
         ok "A '${ZNC_USER}' felhasználó létrehozva."
@@ -427,7 +433,13 @@ show_status() {
     local latest_fallback
     latest_fallback="$(get_latest_version 2>/dev/null || echo '?')"
 
-    msg "Telepített verzió: ${C_BOLD}$(get_installed_version || echo '—')${C_RESET}"
+    local installed_ver
+    installed_ver="$(get_installed_version)"
+    if [[ -n "$installed_ver" ]]; then
+        msg "Telepített verzió: ${C_BOLD}${installed_ver}${C_RESET}"
+    else
+        msg "Telepített verzió: ${C_BOLD}nincs telepítve${C_RESET}"
+    fi
     msg "Elérhető verzió:  ${C_BOLD}${latest_fallback}${C_RESET}"
 
     if [[ -x "$ZNC_BIN" ]]; then
@@ -482,7 +494,8 @@ do_install() {
         warn "ZNC ${installed} már telepítve van!"
         warn "Használd a 'update' parancsot a frissítéshez."
         warn "Vagy futtasd előbb a 'uninstall'-t a tiszta telepítéshez."
-        exit 1
+        read -r -p "  (Enter a visszatéréshez) "
+        return 0
     fi
 
     check_os
@@ -525,7 +538,7 @@ do_update() {
 
     if [[ -z "$installed" ]]; then
         error "A ZNC nincs telepítve. Használd az 'install' parancsot."
-        exit 1
+        return 0
     fi
 
     check_os
@@ -536,14 +549,14 @@ do_update() {
 
     if [[ "$installed" == "$latest" ]]; then
         ok "Már a legfrissebb verzió van telepítve."
-        exit 0
+        return 0
     fi
 
     echo ""
     read -r -p "  Frissíted ${installed} ▸ ${latest} ? [I/n] " confirm
     if [[ "$confirm" =~ ^[nN]$ ]]; then
         info "Frissítés megszakítva."
-        exit 0
+        return 0
     fi
 
     log "=== FRISSÍTÉS START: ${installed} ▸ ${latest} ==="
@@ -599,13 +612,20 @@ do_update() {
 #  UNINSTALL — teljes eltávolítás
 # ══════════════════════════════════════════════════════════════════════════════
 do_uninstall() {
+    # Ha semmi sincs telepítve
+    if [[ ! -f "$SERVICE_FILE" ]] && [[ ! -d "$ZNC_PREFIX" ]] && ! id "$ZNC_USER" &>/dev/null; then
+        info "Eltávolítás megszakítva — a ZNC nincs telepítve."
+        return 0
+    fi
+
     echo -e "\n  ${C_BOLD}═══ ZNC Eltávolító ═══${C_RESET}\n"
 
     warn "${C_RED}FIGYELEM:${C_RESET} Ez törli a ZNC-t, a konfigurációt és a felhasználót!"
     read -r -p "  Biztosan folytatod? (írd be: IGEN) " confirm
     if [[ "$confirm" != "IGEN" ]]; then
         info "Eltávolítás megszakítva."
-        exit 0
+        read -r -p "  (Enter a visszatéréshez) "
+        return 0
     fi
     echo ""
 
@@ -674,18 +694,370 @@ do_uninstall() {
     log "=== ELTÁVOLÍTÁS KÉSZ ==="
 }
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  USER MANAGEMENT — felhasználók kezelése
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Jelszó hash generálása (znc --makepass)
+hash_password() {
+    local pass="$1" output
+    output="$(printf '%s\n%s\n' "$pass" "$pass" | sudo -u "$ZNC_USER" "$ZNC_BIN" --makepass 2>/dev/null)"
+    if [[ -z "$output" ]]; then
+        die "Nem sikerült a jelszó hash generálása."
+    fi
+    method="$(echo "$output" | grep -Po 'Method\s*=\s*\K\S+')"
+    hash="$(echo "$output" | grep -Po 'Hash\s*=\s*\K\S+')"
+    salt="$(echo "$output" | grep -Po 'Salt\s*=\s*\K\S+')"
+    if [[ -z "$method" ]] || [[ -z "$hash" ]] || [[ -z "$salt" ]]; then
+        die "Nem sikerült a jelszó hash értelmezése."
+    fi
+}
+
+# Felhasználók listázása
+do_user_list() {
+    if [[ ! -f "$ZNC_CONF_FILE" ]]; then
+        warn "ZNC konfiguráció nem található."
+        return 0
+    fi
+    local users
+    users="$(grep -Po '<User \K[^>]+' "$ZNC_CONF_FILE")"
+    if [[ -z "$users" ]]; then
+        msg "Nincsenek felhasználók."
+        return 0
+    fi
+    echo ""
+    while IFS= read -r name; do
+        local admin
+        admin="$(sed -n "/<User ${name}>/,/<\/User>/p" "$ZNC_CONF_FILE" | grep -Po '^\s*Admin\s*=\s*\K\w+' | head -1)"
+        if [[ "$admin" == "true" ]]; then
+            echo -e "  ${C_BOLD}${name}${C_RESET} ${C_GREEN}(admin)${C_RESET}"
+        else
+            echo -e "  ${name}"
+        fi
+    done <<< "$users"
+    echo ""
+}
+
+# Új felhasználó hozzáadása
+do_user_add() {
+    if [[ ! -f "$ZNC_CONF_FILE" ]]; then
+        warn "ZNC nincs telepítve. Először futtasd: $0 install"
+        return 0
+    fi
+
+    header "Felhasználó létrehozása"
+    echo ""
+
+    local TAB=$'\t'
+    local username admin nick altnick ident realname bindhost network_name server ssl port server_pass channels
+
+    read -r -p "  Felhasználónév: " username
+    if [[ -z "$username" ]]; then
+        error "A felhasználónév nem lehet üres."
+        return 0
+    fi
+    if grep -q "<User ${username}>" "$ZNC_CONF_FILE"; then
+        error "A(z) '${username}' felhasználó már létezik."
+        return 0
+    fi
+
+    local pass1 pass2
+    while true; do
+        read -r -s -p "  Jelszó (rejtett): " pass1
+        echo ""
+        read -r -s -p "  Jelszó újra: " pass2
+        echo ""
+        if [[ "$pass1" == "$pass2" ]] && [[ -n "$pass1" ]]; then
+            break
+        fi
+        error "A jelszavak nem egyeznek vagy üresek."
+    done
+
+    read -r -p "  Admin? [i/N] " yn
+    if [[ "$yn" =~ ^[iI]$ ]]; then
+        admin="true"
+    else
+        admin="false"
+    fi
+
+    read -r -p "  Nick [${username}]: " nick
+    nick="${nick:-$username}"
+    read -r -p "  AltNick [${username}_]: " altnick
+    altnick="${altnick:-${username}_}"
+
+    local default_ident
+    default_ident="$(echo "$username" | tr '[:upper:]' '[:lower:]')"
+    read -r -p "  Ident [${default_ident}]: " ident
+    ident="${ident:-$default_ident}"
+
+    read -r -p "  RealName [${username}]: " realname
+    realname="${realname:-$username}"
+    read -r -p "  Bind host (opcionális): " bindhost
+
+    # Hálózatok bekérése
+    local network_xml=""
+    msg "  ${C_BOLD}── Hálózat ──${C_RESET}"
+    read -r -p "  Hálózat neve [IRCnet]: " network_name
+    network_name="${network_name:-IRCnet}"
+    read -r -p "  Szerver cím [irc.ircnet.com]: " server
+    server="${server:-irc.ircnet.com}"
+    read -r -p "  SSL? [i/N] " ssl
+    if [[ "$ssl" =~ ^[iI]$ ]]; then
+        read -r -p "  Port [6697]: " port
+        port="${port:-6697}"
+        read -r -p "  Server password (opcionális): " server_pass
+        network_xml+="
+
+${TAB}<Network ${network_name}>
+${TAB}${TAB}LoadModule = simple_away
+${TAB}${TAB}LoadModule = ssl
+${TAB}${TAB}Server     = ${server} +${port} 
+"
+    else
+        read -r -p "  Port [6667]: " port
+        port="${port:-6667}"
+        read -r -p "  Server password (opcionális): " server_pass
+        network_xml+="
+
+${TAB}<Network ${network_name}>
+${TAB}${TAB}LoadModule = simple_away
+${TAB}${TAB}Server     = ${server} ${port} 
+"
+    fi
+    if [[ -n "$server_pass" ]]; then
+        network_xml+="
+${TAB}${TAB}ServerPass  = ${server_pass}"
+    fi
+    read -r -p "  Csatornák (vesszővel): " channels
+    IFS=',' read -ra chan_arr <<< "$channels"
+    for chan in "${chan_arr[@]}"; do
+        chan="$(echo "$chan" | xargs)"
+        [[ -n "$chan" ]] && network_xml+="
+${TAB}${TAB}<Chan ${chan}>
+${TAB}${TAB}</Chan>"
+    done
+    network_xml+="
+${TAB}</Network>"
+
+    # Álljunk le a ZNC-vel
+    info "ZNC leállítása..."
+    if ! systemctl stop znc.service 2>/dev/null; then
+        warn "ZNC leállítása sikertelen — próbáljuk folytatni..."
+    fi
+    sleep 1
+
+    # Biztonsági mentés
+    local backup="${ZNC_CONF_DIR}/znc.conf.bak-$(date +%Y%m%d-%H%M%S)"
+    cp "$ZNC_CONF_FILE" "$backup"
+    ok "Konfiguráció mentve: $backup"
+
+    # Jelszó hash
+    info "Jelszó hash generálása..."
+    hash_password "$pass1"
+
+    # User blokk összeállítása
+    local user_block="
+<User ${username}>
+<Pass password>
+${TAB}Method = ${method}
+${TAB}Hash = ${hash}
+${TAB}Salt = ${salt}
+</Pass>
+${TAB}Admin      = ${admin}
+${TAB}Nick       = ${nick}
+${TAB}AltNick    = ${altnick}
+${TAB}Ident      = ${ident}
+${TAB}RealName   = ${realname}"
+    if [[ -n "$bindhost" ]]; then
+        user_block+="
+${TAB}BindHost    = ${bindhost}"
+    fi
+    user_block+="
+${TAB}LoadModule = chansaver
+${TAB}LoadModule = controlpanel${network_xml}
+</User>"
+
+    # Beszúrás az utolsó </User> után
+    local last_user_line tmp_conf
+    last_user_line="$(grep -n '</User>' "$ZNC_CONF_FILE" | tail -1 | cut -d: -f1)"
+    tmp_conf="$(mktemp)"
+    head -n "$last_user_line" "$ZNC_CONF_FILE" > "$tmp_conf"
+    printf '%s\n' "$user_block" >> "$tmp_conf"
+    tail -n +$((last_user_line + 1)) "$ZNC_CONF_FILE" >> "$tmp_conf"
+    cp "$tmp_conf" "$ZNC_CONF_FILE"
+    rm -f "$tmp_conf"
+    chown "${ZNC_USER}:${ZNC_USER}" "$ZNC_CONF_FILE"
+
+    ok "Felhasználó hozzáadva: ${username}"
+
+    # ZNC újraindítás
+    info "ZNC indítása..."
+    if ! systemctl start znc.service; then
+        error "ZNC nem tudott elindulni a módosítás után. Visszaállítás a mentésből..."
+        cp "$backup" "$ZNC_CONF_FILE"
+        systemctl start znc.service || true
+        return 0
+    fi
+    sleep 1
+
+    if systemctl is-active --quiet znc.service; then
+        ok "ZNC sikeresen fut."
+    else
+        error "ZNC nem indult el. Visszaállítás..."
+        cp "$backup" "$ZNC_CONF_FILE"
+        systemctl start znc.service || true
+        journalctl -u znc.service --no-pager -n 10 2>&1 || true
+        return 0
+    fi
+
+    echo ""
+    msg "  ${C_GREEN}Felhasználó létrehozva:${C_RESET}"
+    echo -e "  ${C_BOLD}Név       ${C_RESET} ${username}"
+    echo -e "  ${C_BOLD}Admin     ${C_RESET} ${admin}"
+    echo -e "  ${C_BOLD}Nick      ${C_RESET} ${nick}"
+    echo -e "  ${C_BOLD}Ident     ${C_RESET} ${ident}"
+    echo ""
+}
+
+# Felhasználó törlése
+do_user_del() {
+    if [[ ! -f "$ZNC_CONF_FILE" ]]; then
+        warn "ZNC nincs telepítve."
+        return 0
+    fi
+
+    local users
+    users="$(grep -Po '<User \K[^>]+' "$ZNC_CONF_FILE")"
+    if [[ -z "$users" ]]; then
+        msg "Nincsenek felhasználók."
+        return 0
+    fi
+
+    header "Felhasználó törlése"
+    do_user_list
+
+    local input
+    read -r -p "  Törlendő felhasználók (vesszővel vagy szóközzel): " input
+    if [[ -z "${input// /}" ]]; then
+        info "Törlés megszakítva."
+        return 0
+    fi
+
+    # Bemenet feldolgozása: vessző vagy szóköz szerint
+    local -a del_users
+    IFS=', ' read -ra del_users <<< "$input"
+    local -a valid_users=()
+    for name in "${del_users[@]}"; do
+        [[ -z "$name" ]] && continue
+        if grep -q "<User ${name}>" "$ZNC_CONF_FILE"; then
+            valid_users+=("$name")
+        else
+            warn "A(z) '${name}' felhasználó nem létezik — kihagyva."
+        fi
+    done
+
+    if [[ ${#valid_users[@]} -eq 0 ]]; then
+        error "Nincs érvényes felhasználónév."
+        return 0
+    fi
+
+    # Megerősítés
+    echo ""
+    msg "  Törlésre kerül: ${C_BOLD}${valid_users[*]}${C_RESET}"
+    local confirm
+    read -r -p "  Írd be mégegyszer a neveket a törléshez: " confirm
+
+    # Ellenőrzés: a megerősített lista egyezik-e
+    local -a confirm_arr
+    IFS=', ' read -ra confirm_arr <<< "$confirm"
+    local -a clean_confirm=()
+    for name in "${confirm_arr[@]}"; do
+        [[ -z "$name" ]] && continue
+        clean_confirm+=("$name")
+    done
+    if [[ "${#valid_users[@]}" -ne "${#clean_confirm[@]}" ]]; then
+        info "Törlés megszakítva — a nevek száma nem egyezik."
+        return 0
+    fi
+    for i in "${!valid_users[@]}"; do
+        if [[ "${valid_users[$i]}" != "${clean_confirm[$i]}" ]]; then
+            info "Törlés megszakítva — a nevek nem egyeznek."
+            return 0
+        fi
+    done
+
+    # ZNC leállítás
+    info "ZNC leállítása..."
+    systemctl stop znc.service 2>/dev/null || true
+    sleep 1
+
+    local backup="${ZNC_CONF_DIR}/znc.conf.bak-$(date +%Y%m%d-%H%M%S)"
+    cp "$ZNC_CONF_FILE" "$backup"
+    ok "Konfiguráció mentve: $backup"
+
+    # User-ek törlése egyesével
+    for username in "${valid_users[@]}"; do
+        sed -i "/<User ${username}>/,/<\/User>/d" "$ZNC_CONF_FILE"
+        ok "Felhasználó törölve: ${username}"
+    done
+
+    # Üres sorok eltávolítása a fájl végéről
+    sed -i ':a; /^\n*$/ { $d; N; ba; }' "$ZNC_CONF_FILE"
+
+    # Moddata törlés felajánlva
+    read -r -p "  Töröljük a moddata könyvtárakat is? [I/n] " yn
+    if [[ ! "$yn" =~ ^[nN]$ ]]; then
+        for username in "${valid_users[@]}"; do
+            rm -rf "${ZNC_HOME}/.znc/users/${username}" 2>/dev/null || true
+            ok "Moddata törölve: ${ZNC_HOME}/.znc/users/${username}"
+        done
+    fi
+
+    # ZNC indítás
+    info "ZNC indítása..."
+    if ! systemctl start znc.service; then
+        error "ZNC nem indult el. Visszaállítás..."
+        cp "$backup" "$ZNC_CONF_FILE"
+        systemctl start znc.service || true
+        return 0
+    fi
+    sleep 1
+    ok "ZNC sikeresen fut."
+    echo ""
+}
+
+# Felhasználó almenü
+user_menu() {
+    local box_w=38
+
+    while true; do
+        echo ""
+        printf "  ${C_BOLD}┌─ Felhasználók ─%s┐${C_RESET}\n" "$(printf '─%.0s' $(seq 1 $((box_w - 16))))"
+        _box_line "  1) Listázás"                     "$box_w"
+        _box_line "  2) Új felhasználó hozzáadása"    "$box_w"
+        _box_line "  3) Felhasználó törlése"          "$box_w"
+        _box_line "  0) Vissza"                       "$box_w"
+        printf "  ${C_BOLD}└%s┘${C_RESET}\n" "$(printf '─%.0s' $(seq 1 $box_w))"
+        echo ""
+        read -r -p "  Válassz [0-3]: " choice
+        case "$choice" in
+            1) header "Felhasználók listája"; do_user_list ;;
+            2) do_user_add ;;
+            3) do_user_del ;;
+            0) return 0 ;;
+            *) warn "Érvénytelen választás." ;;
+        esac
+    done
+}
+
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  INTERACTIVE MENU
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── Doboz-építő segédfüggvények ──────────────────────────────────────────────
-
-# Látható karakterszám (ANSI escape szekvenciák nélkül)
-_vlen() {
-    local plain
-    plain="$(sed 's/\\e\[[0-9;]*m//g' <<< "$1")"
-    echo "${#plain}"
-}
 
 # Adott szélességre jobbról párnázott doboz-sor
 _box_line() {
@@ -742,6 +1114,7 @@ show_menu() {
     _box_line "  ${C_BOLD}2${C_RESET}) Frissítés"               "$box_w"
     _box_line "  ${C_BOLD}3${C_RESET}) Eltávolítás"             "$box_w"
     _box_line "  ${C_BOLD}4${C_RESET}) Állapot"                 "$box_w"
+    _box_line "  ${C_BOLD}5${C_RESET}) Felhasználók"              "$box_w"
     _box_line "  ${C_BOLD}0${C_RESET}) Kilépés"                 "$box_w"
     printf "  ${C_BOLD}└%s┘${C_RESET}\n" "$bot_hr"
     echo ""
@@ -760,6 +1133,9 @@ usage() {
     echo "    $0 update         ZNC frissítése (konfig megtartva)"
     echo "    $0 uninstall      ZNC és minden adat törlése"
     echo "    $0 status         Telepítés állapota"
+    echo "    $0 user list      Felhasználók listázása"
+    echo "    $0 user add       Új felhasználó hozzáadása"
+    echo "    $0 user del       Felhasználó törlése"
     echo "    $0 help           Ez a súgó"
     echo ""
     exit 0
@@ -771,12 +1147,13 @@ usage() {
 interactive() {
     while true; do
         show_menu
-        read -r -p "  Válassz [0-4]: " choice
+        read -r -p "  Válassz [0-5]: " choice
         case "$choice" in
             1) do_install ;;
             2) do_update ;;
             3) do_uninstall ;;
             4) show_status ;;
+            5) user_menu ;;
             0) info "Kilépés."; exit 0 ;;
             *) warn "Érvénytelen választás." ;;
         esac
@@ -793,6 +1170,14 @@ case "${1:-}" in
     update)    do_update ;;
     uninstall) do_uninstall ;;
     status)    show_status ;;
+    user)
+        case "${2:-list}" in
+            list) do_user_list ;;
+            add)  do_user_add ;;
+            del)  do_user_del ;;
+            *)    warn "Használd: $0 user list|add|del";;
+        esac
+        ;;
     help|-h|--help) usage ;;
     "")        interactive ;;
     *)         warn "Ismeretlen parancs: $1"; usage ;;

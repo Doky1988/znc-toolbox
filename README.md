@@ -21,6 +21,8 @@
 - **Frissítés** — új verzióra frissítés a meglévő konfiguráció megtartásával és biztonsági mentéssel
 - **Eltávolítás** — ZNC, konfiguráció, systemd szolgáltatás, felhasználó és home könyvtár teljes törlése
 - **Állapot** — telepített verzió, elérhető frissítés, szolgáltatás állapotának ellenőrzése
+- **Felhasználók kezelése** — új ZNC user hozzáadása CLI-ből, törlés, listázás
+- **Több user törlése** — egyszerre több felhasználó törlése egy ZNC újraindítással
 - **Interaktív menü** — könnyen áttekinthető dobozos felület
 - **IPv6 támogatás** — telepítéskor választható, frissítéskor automatikusan megtartva
 - **Port ellenőrzés** — telepítés után jelzi, hogy a port nyitva van-e
@@ -62,6 +64,7 @@ sudo ./znc-toolbox.sh
   │  2) Frissítés                              │
   │  3) Eltávolítás                            │
   │  4) Állapot                                │
+  │  5) Felhasználók                           │
   │  0) Kilépés                                │
   └────────────────────────────────────────────┘
 ```
@@ -73,6 +76,9 @@ sudo ./znc-toolbox.sh install      # ZNC telepítése
 sudo ./znc-toolbox.sh update       # ZNC frissítése
 sudo ./znc-toolbox.sh uninstall    # ZNC eltávolítása
 sudo ./znc-toolbox.sh status       # Állapot lekérése
+sudo ./znc-toolbox.sh user list    # Felhasználók listázása
+sudo ./znc-toolbox.sh user add     # Új felhasználó hozzáadása
+sudo ./znc-toolbox.sh user del     # Felhasználó törlése
 sudo ./znc-toolbox.sh help         # Súgó
 ```
 
@@ -141,6 +147,46 @@ sudo ./znc-toolbox.sh help         # Súgó
 
 ---
 
+## 👥 Felhasználók kezelése
+
+A Toolbox CLI-ből is képes ZNC felhasználókat kezelni — a varázsló pontosan ugyanazokat a mezőket kéri be mint a `--makeconf`.
+
+### Listázás
+
+```bash
+sudo ./znc-toolbox.sh user list
+```
+
+```
+  Doky (admin)
+  Hopi
+```
+
+### Új felhasználó hozzáadása
+
+```bash
+sudo ./znc-toolbox.sh user add
+```
+
+A varázsló végigkérdezi az összes mezőt:
+- felhasználónév, jelszó (rejtett, dupla bekérés)
+- admin jog, nick, altnick, ident, realname, bindhost
+- hálózat: név, szerver cím, SSL, port, server password, csatornák
+
+A jelszó SHA256 hash-sel kerül a konfigurációba (ugyanúgy mint a `--makeconf`-nél). A generált `<User>` blokk formailag azonos a `--makeconf` által létrehozottal.
+
+> A `user add` a ZNC-t a módosítás idejére leállítja, biztonsági mentést készít, majd újraindítja. Hibánál automatikusan visszaállít.
+
+### Felhasználó törlése
+
+```bash
+sudo ./znc-toolbox.sh user del
+```
+
+Több felhasználó is törölhető egyszerre — a neveket vesszővel vagy szóközzel elválasztva kell megadni. A törlés egy ZNC újraindítással elintézi az összes megadott usert, plusz opcionálisan a moddata könyvtárakat is törli.
+
+---
+
 ## 📂 Konfigurációs fájlok
 
 | Fájl | Leírás |
@@ -157,8 +203,10 @@ sudo ./znc-toolbox.sh help         # Súgó
 - A függőségek (`build-essential`, `cmake`, stb.) az eltávolítás után is a rendszeren maradnak, mivel más programok is használhatják
 - Frissítéskor a régi IPv6 beállítás automatikusan megmarad
 - A külső IP cím az `ipinfo.io` szolgáltatáson keresztül kerül lekérésre
+- A `user add` a ZNC-t a módosítás idejére leállítja, majd újraindítja — a `--makeconf`-fal azonos formátumú konfigurációt generál
+- A `user del` több felhasználó egyidejű törlését is támogatja egyetlen ZNC újraindítással
 
 ---
 
 ## ❤️ Készítette: Doky  
-📅 2026.08.07
+📅 2026.08.08

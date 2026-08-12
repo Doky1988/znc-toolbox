@@ -209,4 +209,4 @@ Több felhasználó is törölhető egyszerre — a neveket vesszővel vagy szó
 ---
 
 ## ❤️ Készítette: Doky  
-📅 2026.08.08
+📅 2026.08.09

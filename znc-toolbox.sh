@@ -119,13 +119,18 @@ get_installed_version() {
 # ══════════════════════════════════════════════════════════════════════════════
 install_deps() {
     header "Függőségek telepítése"
-    apt-get update -qq
+
+    _spin "Csomaglisták frissítése" \
+        apt-get update -qq \
+        || die "Csomaglista frissítés sikertelen."
+
     local pkgs=(build-essential cmake pkg-config libssl-dev libsasl2-dev
                 libicu-dev libzstd-dev wget tar)
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${pkgs[@]}"
-    for pkg in "${pkgs[@]}"; do
-        dpkg -s "$pkg" &>/dev/null && ok "$pkg" || warn "$pkg"
-    done
+
+    _spin "Csomagok telepítése" \
+        env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${pkgs[@]}" \
+        || die "Függőségek telepítése sikertelen."
+
     log "Függőségek telepítve: ${pkgs[*]}"
 }
 
@@ -570,7 +575,8 @@ do_update() {
 
     # Biztonsági mentés a konfigurációról
     if [[ -f "$ZNC_CONF_FILE" ]]; then
-        local backup="${ZNC_CONF_DIR}/znc.conf.bak-$(date +%Y%m%d-%H%M%S)"
+        local backup
+        backup="${ZNC_CONF_DIR}/znc.conf.bak-$(date +%Y%m%d-%H%M%S)"
         info "Konfiguráció biztonsági mentése..."
         cp "$ZNC_CONF_FILE" "$backup"
         ok "Mentve: $backup"
@@ -858,7 +864,8 @@ ${TAB}</Network>"
     sleep 1
 
     # Biztonsági mentés
-    local backup="${ZNC_CONF_DIR}/znc.conf.bak-$(date +%Y%m%d-%H%M%S)"
+    local backup
+    backup="${ZNC_CONF_DIR}/znc.conf.bak-$(date +%Y%m%d-%H%M%S)"
     cp "$ZNC_CONF_FILE" "$backup"
     ok "Konfiguráció mentve: $backup"
 
@@ -1003,7 +1010,8 @@ do_user_del() {
     systemctl stop znc.service 2>/dev/null || true
     sleep 1
 
-    local backup="${ZNC_CONF_DIR}/znc.conf.bak-$(date +%Y%m%d-%H%M%S)"
+    local backup
+    backup="${ZNC_CONF_DIR}/znc.conf.bak-$(date +%Y%m%d-%H%M%S)"
     cp "$ZNC_CONF_FILE" "$backup"
     ok "Konfiguráció mentve: $backup"
 

@@ -208,6 +208,7 @@ Több felhasználó is törölhető egyszerre — a neveket vesszővel vagy szó
 - A script nyilvántartja, mely csomagokat telepítette (`build-essential`, `cmake`, `oidentd`, stb.) — eltávolításkor felajánlja a törlésüket, de csak azokat bántja, amiket tényleg ő rakott fel
 - A telepítés előtt már meglévő csomagokat (pl. KeyHelp/cPanel által telepítetteket) az eltávolítás érintetlenül hagyja
 - Frissítéskor a régi IPv6 beállítás automatikusan megmarad
+- A `--makeconf` varázsló szándékosan nem indítja el a ZNC-t — az csak a telepítés legvégén, a systemd szolgáltatásban indul el, a végleges beállításokkal
 - Az ident támogatás a ZNC `identfile` modulját + külső `oidentd`-t használ — minden felhasználó a saját `Ident` mezőjével jelenik meg (pl. `Teszt!teszt@host`)
 - Az ident a `nick!ident@host` középső tagja; a host részt a szerver IP/PTR neve adja, azt az identd nem befolyásolja
 - Ident támogatásnál a `/home/znc` jogosultsága 711-re változik, hogy az oidentd olvashassa a spoof fájlt

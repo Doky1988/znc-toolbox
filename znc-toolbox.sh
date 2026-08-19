@@ -381,7 +381,9 @@ OIDENTDEOF
         local ident_backup
         ident_backup="${ZNC_CONF_DIR}/znc.conf.bak-ident-$(date +%Y%m%d-%H%M%S)"
         cp "$ZNC_CONF_FILE" "$ident_backup"
-        sed -i '/^Version = /a LoadModule = identfile' "$ZNC_CONF_FILE"
+        local last_loadmod
+        last_loadmod="$(grep -n '^LoadModule = ' "$ZNC_CONF_FILE" | tail -1 | cut -d: -f1)"
+        sed -i "${last_loadmod}a LoadModule = identfile" "$ZNC_CONF_FILE"
         chown "${ZNC_USER}:${ZNC_USER}" "$ZNC_CONF_FILE"
         ok "LoadModule = identfile hozzáadva (mentés: $ident_backup)"
     fi

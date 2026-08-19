@@ -161,7 +161,7 @@ sudo ./znc-toolbox.sh user list
 
 ```
   Doky (admin)
-  Hopi
+  Teszt
 ```
 
 ### Új felhasználó hozzáadása

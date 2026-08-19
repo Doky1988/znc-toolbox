@@ -17,6 +17,7 @@
 # ---------------------------------------------------------------------------
 
 set -Eeuo pipefail
+shopt -s extglob
 
 # ── Változók ─────────────────────────────────────────────────────────────────
 readonly ZNC_USER="znc"
@@ -29,6 +30,7 @@ readonly SERVICE_FILE="/etc/systemd/system/znc.service"
 readonly API_URL="https://api.github.com/repos/znc/znc/tags"
 readonly DL_BASE="https://znc.in/releases/archive"
 readonly LOG_FILE="/var/log/znc-toolbox.log"
+readonly PKG_LIST="/var/lib/znc-toolbox/packages.list"
 
 # ── Színkódok ────────────────────────────────────────────────────────────────
 readonly C_RESET='\e[0m'
@@ -55,6 +57,27 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
 }
 
+# ── Csomag-követés — a script által telepített csomagok nyilvántartása ───────
+PACKAGES_BEFORE=""
+
+track_packages_start() {
+    PACKAGES_BEFORE="$(dpkg-query -W -f='${Package}\n' 2>/dev/null | sort)"
+}
+
+track_packages_end() {
+    local after new
+    after="$(dpkg-query -W -f='${Package}\n' 2>/dev/null | sort)"
+    new="$(comm -13 <(printf '%s\n' "$PACKAGES_BEFORE") <(printf '%s\n' "$after") \
+        | grep -v '^$' || true)"
+    if [[ -n "$new" ]]; then
+        mkdir -p "$(dirname "$PKG_LIST")"
+        printf '%s\n' "$new" >> "$PKG_LIST"
+        sort -u -o "$PKG_LIST" "$PKG_LIST"
+        log "Új csomagok feljegyezve: ${new//$'\n'/ }"
+    fi
+    PACKAGES_BEFORE=""
+}
+
 # ── Ideiglenes könyvtár takarítás ───────────────────────────────────────────
 trap_cleanup() {
     local ec=$?
@@ -77,6 +100,7 @@ check_os() {
     if [[ ! -f /etc/os-release ]]; then
         die "Nem található az /etc/os-release fájl. Csak Debian / Ubuntu támogatott."
     fi
+    # shellcheck disable=SC1091
     source /etc/os-release 2>/dev/null || die "Nem sikerült beolvasni az /etc/os-release fájlt."
     if [[ "$ID" != "debian" ]] && [[ "$ID" != "ubuntu" ]]; then
         die "Csak Debian vagy Ubuntu rendszereken használható. (Érzékelt: ${ID})"
@@ -152,9 +176,9 @@ _spin() {
     wait "$pid"
     local ec=$?
     if [[ $ec -eq 0 ]]; then
-        printf " ${C_GREEN}kész.${C_RESET}\n"
+        printf " %bkész.%b\n" "$C_GREEN" "$C_RESET"
     else
-        printf " ${C_RED}hiba!${C_RESET}\n"
+        printf " %bhiba!%b\n" "$C_RED" "$C_RESET"
         return 1
     fi
 }
@@ -185,6 +209,7 @@ build_znc() {
         cmake_opts="${cmake_opts} -DWANT_IPV6=OFF"
     fi
 
+    # shellcheck disable=SC2086
     _spin "CMake konfigurálása" \
         cmake -S "$src_dir" -B "$build_dir" $cmake_opts -Wno-dev \
         || die "CMake konfigurálás sikertelen."
@@ -291,10 +316,94 @@ make_config() {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  SETUP_IDENT — oidentd + identfile modul (per-user ident)
+# ══════════════════════════════════════════════════════════════════════════════
+setup_ident() {
+    header "Ident támogatás (oidentd + identfile)"
+
+    _spin "oidentd telepítése" \
+        env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq oidentd \
+        || die "oidentd telepítése sikertelen."
+
+    # oidentd konfiguráció — spoof engedély a znc usernek
+    local oidentd_conf="/etc/oidentd.conf"
+    if [[ -f "$oidentd_conf" ]] && grep -qE "^user +\"?${ZNC_USER}\"? +\\{" "$oidentd_conf"; then
+        ok "Az oidentd konfiguráció már tartalmazza a '${ZNC_USER}' user beállítást."
+    else
+        info "oidentd konfiguráció frissítése: $oidentd_conf"
+        cat >> "$oidentd_conf" <<OIDENTDEOF
+user "${ZNC_USER}" {
+    default {
+        allow spoof
+        allow spoof_all
+    }
+}
+OIDENTDEOF
+        ok "oidentd konfiguráció frissítve."
+    fi
+
+    # oidentd szolgáltatás — socket aktivációt preferáljuk, ha elérhető
+    if systemctl list-unit-files oidentd.socket &>/dev/null; then
+        systemctl enable oidentd.socket 2>/dev/null || true
+        systemctl restart oidentd.socket 2>/dev/null || true
+        if systemctl is-active --quiet oidentd.socket; then
+            ok "oidentd socket fut (113-as port)."
+        else
+            warn "Az oidentd socket nem indult el."
+        fi
+    elif systemctl list-unit-files oidentd.service &>/dev/null; then
+        systemctl enable oidentd.service 2>/dev/null || true
+        systemctl restart oidentd.service 2>/dev/null || true
+        if systemctl is-active --quiet oidentd.service; then
+            ok "oidentd szolgáltatás fut."
+        else
+            warn "Az oidentd szolgáltatás nem indult el."
+        fi
+    else
+        warn "Nincs systemd unit az oidentd-hez — ellenőrizd, hogy fut-e (pl. inetd alatt)."
+    fi
+
+    # Ident spoof fájl a znc user home-jában
+    touch "${ZNC_HOME}/.oidentd.conf"
+    chown "${ZNC_USER}:${ZNC_USER}" "${ZNC_HOME}/.oidentd.conf"
+    chmod 644 "${ZNC_HOME}/.oidentd.conf"
+    ok "Spoof fájl: ${ZNC_HOME}/.oidentd.conf"
+
+    # A home könyvtárnak átjárhatónak kell lennie az oidentd számára
+    chmod 711 "$ZNC_HOME"
+    ok "Home jogosultság: 711 (oidentd olvasási jog)"
+
+    # identfile modul betöltése globálisan
+    if grep -q "^LoadModule = identfile" "$ZNC_CONF_FILE"; then
+        ok "Az identfile modul már be van töltve."
+    else
+        info "Konfiguráció módosítása..."
+        local ident_backup
+        ident_backup="${ZNC_CONF_DIR}/znc.conf.bak-ident-$(date +%Y%m%d-%H%M%S)"
+        cp "$ZNC_CONF_FILE" "$ident_backup"
+        sed -i '/^Version = /a LoadModule = identfile' "$ZNC_CONF_FILE"
+        chown "${ZNC_USER}:${ZNC_USER}" "$ZNC_CONF_FILE"
+        ok "LoadModule = identfile hozzáadva (mentés: $ident_backup)"
+    fi
+
+    log "Ident támogatás beállítva (oidentd + identfile)."
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  SERVICE_SETUP — systemd szolgáltatás létrehozása és indítása
 # ══════════════════════════════════════════════════════════════════════════════
 service_setup() {
     header "Systemd szolgáltatás"
+
+    # Ident flag visszaolvasása (2. sor a toolbox-flags-ben)
+    local ident_flag="n"
+    if [[ -f "${ZNC_HOME}/.znc/toolbox-flags" ]]; then
+        ident_flag="$(sed -n '2p' "${ZNC_HOME}/.znc/toolbox-flags")"
+    fi
+    local rw_paths="${ZNC_HOME}/.znc"
+    if [[ "$ident_flag" =~ ^[iIyY] ]]; then
+        rw_paths="${rw_paths} ${ZNC_HOME}/.oidentd.conf"
+    fi
 
     cat <<EOF > "$SERVICE_FILE"
 [Unit]
@@ -320,7 +429,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=${ZNC_HOME}/.znc
+ReadWritePaths=${rw_paths}
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
@@ -526,13 +635,24 @@ do_install() {
 
     log "=== TELEPÍTÉS START: ZNC ${version} ==="
 
+    track_packages_start
     install_deps
     create_user
     build_znc "$version" "$enable_ipv6"
     make_config
 
-    # IPv6 beállítás mentése frissítéshez
-    echo "$enable_ipv6" > "${ZNC_HOME}/.znc/toolbox-flags"
+    # Ident támogatás (oidentd + identfile)
+    local enable_ident="n"
+    read -r -p "  Ident támogatás (oidentd + identfile) beállítása? [i/N] " enable_ident
+    enable_ident="${enable_ident:-n}"
+
+    if [[ "$enable_ident" =~ ^[iIyY] ]]; then
+        setup_ident
+    fi
+    track_packages_end
+
+    # Beállítások mentése frissítéshez (1. sor: IPv6, 2. sor: ident)
+    printf '%s\n%s\n' "$enable_ipv6" "$enable_ident" > "${ZNC_HOME}/.znc/toolbox-flags"
 
     service_setup
     print_summary
@@ -596,21 +716,33 @@ do_update() {
         ok "Törölve: ${ZNC_PREFIX}"
     fi
 
+    track_packages_start
     install_deps
+    track_packages_end
     create_user
 
-    # Eredeti IPv6 beállítás visszaolvasása
+    # Eredeti beállítások visszaolvasása (1. sor: IPv6, 2. sor: ident)
     local enable_ipv6="i"
+    local enable_ident="n"
     if [[ -f "${ZNC_HOME}/.znc/toolbox-flags" ]]; then
-        enable_ipv6="$(<"${ZNC_HOME}/.znc/toolbox-flags")"
+        enable_ipv6="$(sed -n '1p' "${ZNC_HOME}/.znc/toolbox-flags")"
+        enable_ipv6="${enable_ipv6:-i}"
+        enable_ident="$(sed -n '2p' "${ZNC_HOME}/.znc/toolbox-flags")"
+        enable_ident="${enable_ident:-n}"
         info "IPv6 beállítás megtartva: ${enable_ipv6}"
     fi
 
     build_znc "$latest" "$enable_ipv6"
 
-    # IPv6 flag frissítése
+    # Ident beállítás megtartása — a create_user 750-re állította a home-ot
+    if [[ "$enable_ident" =~ ^[iIyY] ]]; then
+        chmod 711 "$ZNC_HOME"
+        ok "Ident beállítás megtartva (home: 711)."
+    fi
+
+    # Flag frissítése
     mkdir -p "${ZNC_HOME}/.znc"
-    echo "$enable_ipv6" > "${ZNC_HOME}/.znc/toolbox-flags"
+    printf '%s\n%s\n' "$enable_ipv6" "$enable_ident" > "${ZNC_HOME}/.znc/toolbox-flags"
 
     # Konfigurációt NEM bántjuk, csak a binárist cseréltük
     ok "Konfiguráció megtartva."
@@ -700,6 +832,38 @@ do_uninstall() {
         else
             warn "Nem sikerült törölni: ${ZNC_HOME}"
         fi
+    fi
+
+    # A script által telepített csomagok törlése
+    local -a still_installed=()
+    if [[ -f "$PKG_LIST" ]]; then
+        local -a tracked
+        mapfile -t tracked < "$PKG_LIST"
+        local -a still_installed=()
+        local p
+        for p in "${tracked[@]}"; do
+            [[ -z "$p" ]] && continue
+            if dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q "install ok installed"; then
+                still_installed+=("$p")
+            fi
+        done
+        if [[ ${#still_installed[@]} -gt 0 ]]; then
+            echo ""
+            msg "A script által telepített csomagok: ${C_BOLD}${still_installed[*]}${C_RESET}"
+            local del_pkgs
+            read -r -p "  Töröljük őket is? [I/n] " del_pkgs
+            if [[ ! "$del_pkgs" =~ ^[nN]$ ]]; then
+                if _spin "Csomagok törlése (purge)" \
+                    env DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq "${still_installed[@]}"; then
+                    ok "Csomagok törölve."
+                else
+                    warn "A csomagok törlése nem sikerült maradéktalanul — ellenőrizd kézzel."
+                fi
+            else
+                info "Csomagok megtartva."
+            fi
+        fi
+        rm -f "$PKG_LIST"
     fi
 
     echo ""
@@ -1083,7 +1247,7 @@ user_menu() {
 # Adott szélességre jobbról párnázott doboz-sor
 _box_line() {
     local raw="$1" box_w="$2" plain pad
-    plain="$(sed 's/\\e\[[0-9;]*m//g' <<< "$raw")"
+    plain="${raw//\\e\[+([0-9;])m/}"
     pad=$(( box_w - ${#plain} ))
     (( pad < 0 )) && pad=0
     printf "  ${C_BOLD}│${C_RESET}%b%*s${C_BOLD}│${C_RESET}\n" "$raw" "$pad" ""
@@ -1092,7 +1256,7 @@ _box_line() {
 # Középre igazított doboz-sor
 _center_line() {
     local raw="$1" box_w="$2" plain lpad rpad
-    plain="$(sed 's/\\e\[[0-9;]*m//g' <<< "$raw")"
+    plain="${raw//\\e\[+([0-9;])m/}"
     lpad=$(( (box_w - ${#plain}) / 2 ))
     rpad=$(( box_w - ${#plain} - lpad ))
     (( lpad < 0 )) && lpad=0

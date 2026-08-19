@@ -19,12 +19,13 @@
 
 - **Telepítés** — legfrissebb stabil ZNC letöltése, fordítása, telepítése `/home/znc/znc` alá
 - **Frissítés** — új verzióra frissítés a meglévő konfiguráció megtartásával és biztonsági mentéssel
-- **Eltávolítás** — ZNC, konfiguráció, systemd szolgáltatás, felhasználó és home könyvtár teljes törlése
+- **Eltávolítás** — ZNC, konfiguráció, systemd szolgáltatás, felhasználó és home könyvtár teljes törlése + a script által telepített csomagok (opcionális)
 - **Állapot** — telepített verzió, elérhető frissítés, szolgáltatás állapotának ellenőrzése
 - **Felhasználók kezelése** — új ZNC user hozzáadása CLI-ből, törlés, listázás
 - **Több user törlése** — egyszerre több felhasználó törlése egy ZNC újraindítással
 - **Interaktív menü** — könnyen áttekinthető dobozos felület
 - **IPv6 támogatás** — telepítéskor választható, frissítéskor automatikusan megtartva
+- **Ident támogatás** — oidentd + identfile: minden felhasználó a saját `Ident` mezőjével jelenik meg IRC-n (telepítéskor választható)
 - **Port ellenőrzés** — telepítés után jelzi, hogy a port nyitva van-e
 - **Webadmin URL** — külső IP címmel együtt kiírva
 - **Naplózás** — minden művelet a `/var/log/znc-toolbox.log` fájlba kerül
@@ -90,11 +91,12 @@ sudo ./znc-toolbox.sh help         # Súgó
 2. **IPv6 választás** — engedélyezed az IPv6 támogatást?
 3. **Verzió választás** — alapértelmezett a legfrissebb, de megadhatsz egyedit is (pl. `1.9.1`)
 4. **Függőségek telepítése** — `build-essential`, `cmake`, `libssl-dev`, stb.
-5. **ZNC letöltése és fordítása** — pont-animációval, a build kimenet naplózva
-6. **`znc` rendszerfelhasználó létrehozása** — `/home/znc` home könyvtárral
+5. **`znc` rendszerfelhasználó létrehozása** — `/home/znc` home könyvtárral
+6. **ZNC letöltése és fordítása** — pont-animációval, a build kimenet naplózva
 7. **`--makeconf` varázsló** — interaktív konfiguráció (port, admin jelszó, IRC hálózatok)
-8. **Systemd szolgáltatás** — automatikus indítás rendszerindításkor
-9. **Port ellenőrzés** — a beállított port figyelésének ellenőrzése
+8. **Ident támogatás (opcionális)** — oidentd + identfile: per-user ident, RFC1413 kompatibilis
+9. **Systemd szolgáltatás** — automatikus indítás rendszerindításkor
+10. **Port ellenőrzés** — a beállított port figyelésének ellenőrzése
 
 ### Telepítési összegző
 
@@ -173,7 +175,7 @@ A varázsló végigkérdezi az összes mezőt:
 - admin jog, nick, altnick, ident, realname, bindhost
 - hálózat: név, szerver cím, SSL, port, server password, csatornák
 
-A jelszó SHA256 hash-sel kerül a konfigurációba (ugyanúgy mint a `--makeconf`-nél). A generált `<User>` blokk formailag azonos a `--makeconf` által létrehozottal.
+A jelszó a ZNC saját `--makepass` eszközével generált hash-sel kerül a konfigurációba (alapértelmezetten SHA256) — ugyanúgy, mint a `--makeconf`-nél. A generált `<User>` blokk formailag azonos a `--makeconf` által létrehozottal.
 
 > A `user add` a ZNC-t a módosítás idejére leállítja, biztonsági mentést készít, majd újraindítja. Hibánál automatikusan visszaállít.
 
@@ -192,16 +194,25 @@ Több felhasználó is törölhető egyszerre — a neveket vesszővel vagy szó
 | Fájl | Leírás |
 |---|---|
 | `/home/znc/.znc/configs/znc.conf` | ZNC konfiguráció |
-| `/home/znc/.znc/toolbox-flags` | IPv6 beállítás (frissítéshez) |
+| `/home/znc/.znc/toolbox-flags` | IPv6 + ident beállítások (frissítéshez) |
+| `/home/znc/.oidentd.conf` | Ident spoof fájl (identfile modul) |
+| `/etc/oidentd.conf` | oidentd konfiguráció (spoof engedély a znc usernek) |
 | `/etc/systemd/system/znc.service` | Systemd szolgáltatás |
+| `/var/lib/znc-toolbox/packages.list` | A script által telepített csomagok listája (eltávolításhoz) |
 | `/var/log/znc-toolbox.log` | Toolbox napló |
 
 ---
 
 ## 📝 Megjegyzések
 
-- A függőségek (`build-essential`, `cmake`, stb.) az eltávolítás után is a rendszeren maradnak, mivel más programok is használhatják
+- A script nyilvántartja, mely csomagokat telepítette (`build-essential`, `cmake`, `oidentd`, stb.) — eltávolításkor felajánlja a törlésüket, de csak azokat bántja, amiket tényleg ő rakott fel
+- A telepítés előtt már meglévő csomagokat (pl. KeyHelp/cPanel által telepítetteket) az eltávolítás érintetlenül hagyja
 - Frissítéskor a régi IPv6 beállítás automatikusan megmarad
+- Az ident támogatás a ZNC `identfile` modulját + külső `oidentd`-t használ — minden felhasználó a saját `Ident` mezőjével jelenik meg (pl. `Teszt!teszt@host`)
+- Az ident a `nick!ident@host` középső tagja; a host részt a szerver IP/PTR neve adja, azt az identd nem befolyásolja
+- Ident támogatásnál a `/home/znc` jogosultsága 711-re változik, hogy az oidentd olvashassa a spoof fájlt
+- Az oidentd sok felhasználó esetén lassíthatja a szerverekhez való csatlakozást, mert a kapcsolódások sorba állnak (ZNC wiki figyelmeztetés)
+- Az eltávolítás az oidentd csomagot is felajánlja törlésre, ha azt a script telepítette — ha a script előtt is fent volt, a rendszeren marad
 - A külső IP cím az `ipinfo.io` szolgáltatáson keresztül kerül lekérésre
 - A `user add` a ZNC-t a módosítás idejére leállítja, majd újraindítja — a `--makeconf`-fal azonos formátumú konfigurációt generál
 - A `user del` több felhasználó egyidejű törlését is támogatja egyetlen ZNC újraindítással

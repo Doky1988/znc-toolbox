@@ -42,18 +42,23 @@
 
 ## 📥 Telepítés és használat
 
-### Letöltés
+### Letöltés és futtatás
 
 ```bash
 wget https://raw.githubusercontent.com/Doky1988/znctoolbox/main/znc-toolbox.sh
 chmod +x znc-toolbox.sh
+sudo bash znc-toolbox.sh
+```
+
+### Egy paranccsal
+
+```bash
+bash <(wget -qO- https://raw.githubusercontent.com/Doky1988/znctoolbox/main/znc-toolbox.sh)
 ```
 
 ### Interaktív menü
 
-```bash
-sudo ./znc-toolbox.sh
-```
+A fenti parancsok futtatása után automatikusan megnyílik:
 
 ```
   ┌────────────────────────────────────────────┐

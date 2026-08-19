@@ -291,7 +291,7 @@ make_config() {
     while true; do
         echo ""
         set +e
-        sudo -u "$ZNC_USER" env HOME="$ZNC_HOME" "$ZNC_BIN" --makeconf
+        sudo -u "$ZNC_USER" env HOME="$ZNC_HOME" ZNC_NO_LAUNCH_AFTER_MAKECONF=1 "$ZNC_BIN" --makeconf
         makeconf_rc=$?
         set -e
 
